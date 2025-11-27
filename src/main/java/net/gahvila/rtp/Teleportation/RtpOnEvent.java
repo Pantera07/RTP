@@ -1,7 +1,9 @@
 package net.gahvila.rtp.Teleportation;
 
 import net.gahvila.rtp.RTP;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -74,11 +76,18 @@ public class RtpOnEvent implements Listener {
      */
     @EventHandler(priority = EventPriority.HIGHEST)
     public void playerRespawn(PlayerRespawnEvent event) {
+        Location respawnLoc = event.getRespawnLocation();
+        boolean isBedOrAnchorSpawn = event.isBedSpawn() || isAnchorSpawn(event);
+        boolean respawnLocIsLava = isBedOrAnchorSpawn && !isSafeFromLava(respawnLoc);
+        boolean runDefaultRTP =
+                (!randomTeleporter.onDeathRespectBeds || !event.isBedSpawn()) &&
+                        (!randomTeleporter.onDeathRespectAnchors || !isAnchorSpawn(event));
+        boolean runLavaOverrideRTP = respawnLocIsLava;
+
         //All conditions must be met to continue
         if (randomTeleporter.onDeathRtp &&
-            (!randomTeleporter.onDeathRequirePermission || event.getPlayer().hasPermission("jakesrtp.rtpondeath")) &&
-            (!randomTeleporter.onDeathRespectBeds || !event.isBedSpawn()) &&
-            (!randomTeleporter.onDeathRespectAnchors || !isAnchorSpawn(event))
+                (!randomTeleporter.onDeathRequirePermission || event.getPlayer().hasPermission("jakesrtp.rtpondeath")) &&
+                (runDefaultRTP || runLavaOverrideRTP)
         ) try {
             Location landingLoc = new RandomTeleportAction(
                 randomTeleporter,
@@ -89,6 +98,16 @@ public class RtpOnEvent implements Listener {
             ).requestLocation();
             event.setRespawnLocation(landingLoc);
             oldRespawnEvents.put(event, landingLoc.clone());
+            if (runLavaOverrideRTP) {
+                RTP.infoLog(
+                    event.getPlayer().getName() +
+                        " - Lava Override: Respawn location (" +
+                        respawnLoc.toVector() +
+                        ") was unsafe, forcing RTP."
+                );
+                event.getPlayer().setRespawnLocation(null, true);
+                event.getPlayer().sendMessage(Component.translatable("block.minecraft.spawn.not_valid"));
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -131,4 +150,22 @@ public class RtpOnEvent implements Listener {
                a.getBlockY() == b.getBlockY() &&
                a.getBlockZ() == b.getBlockZ();
     }
+
+private boolean isSafeFromLava(Location respawnLocation) {
+    // Skip check if the chunk is not loaded to prevent lag/errors.
+    if (!respawnLocation.getBlock().getChunk().isLoaded()) return true; 
+    
+    // 1. Block where the player's feet will be.
+    Material blockBelow = respawnLocation.getBlock().getType();
+
+    // 2. Block where the player's head will be.
+    Location headLocation = respawnLocation.clone().add(0, 1, 0);
+    Material blockAbove = headLocation.getBlock().getType();
+
+    // Check if either of the two blocks is lava.
+    if (blockBelow == Material.LAVA || blockAbove == Material.LAVA) {
+        return false; // Not safe because lava was found.
+    }
+
+    return true; // Safe from lava.
 }
