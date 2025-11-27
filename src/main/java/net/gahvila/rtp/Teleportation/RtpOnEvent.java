@@ -151,21 +151,33 @@ public class RtpOnEvent implements Listener {
                a.getBlockZ() == b.getBlockZ();
     }
 
-private boolean isSafeFromLava(Location respawnLocation) {
-    // Skip check if the chunk is not loaded to prevent lag/errors.
-    if (!respawnLocation.getBlock().getChunk().isLoaded()) return true; 
-    
-    // 1. Block where the player's feet will be.
-    Material blockBelow = respawnLocation.getBlock().getType();
+    private boolean isSafeFromLava(Location respawnLocation) {
+        // Skip check if the chunk is not loaded to prevent lag/errors.
+        if (!respawnLocation.getBlock().getChunk().isLoaded()) return true;
 
-    // 2. Block where the player's head will be.
-    Location headLocation = respawnLocation.clone().add(0, 1, 0);
-    Material blockAbove = headLocation.getBlock().getType();
+        // Create a new location with ceil(Y) to ensure we check the correct integer block height.
+        int safeY = (int) Math.ceil(respawnLocation.getY());
 
-    // Check if either of the two blocks is lava.
-    if (blockBelow == Material.LAVA || blockAbove == Material.LAVA) {
-        return false; // Not safe because lava was found.
+        // Use the ceiling Y for block checking. X and Z remain the same.
+        Location checkLocation = new Location(
+                respawnLocation.getWorld(),
+                respawnLocation.getX(),
+                safeY,
+                respawnLocation.getZ()
+        );
+
+        // 1. Block where the player's feet will be (at safeY).
+        Material blockBelow = checkLocation.getBlock().getType();
+
+        // 2. Block where the player's head will be (at safeY + 1).
+        // Note: The player occupies two blocks (safeY and safeY + 1).
+        Location headLocation = checkLocation.clone().add(0, 1, 0);
+        Material blockAbove = headLocation.getBlock().getType();
+
+        // Check if either of the two blocks is lava.
+        if (blockBelow == Material.LAVA || blockAbove == Material.LAVA) {
+            return false; // Not safe because lava was found.
+        }
+
+        return true; // Safe from lava.
     }
-
-    return true; // Safe from lava.
-}
