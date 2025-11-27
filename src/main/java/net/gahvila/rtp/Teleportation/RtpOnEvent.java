@@ -156,7 +156,9 @@ public class RtpOnEvent implements Listener {
         if (!respawnLocation.getBlock().getChunk().isLoaded()) return true;
 
         // Create a new location with ceil(Y) to ensure we check the correct integer block height.
-        int safeY = (int) Math.ceil(respawnLocation.getY());
+        double originalY = respawnLocation.getY();
+        int floorY = (int) Math.floor(originalY);
+        int safeY = (originalY - floorY > 0.2) ? (floorY + 1) : floorY;
 
         // Use the ceiling Y for block checking. X and Z remain the same.
         Location checkLocation = new Location(
