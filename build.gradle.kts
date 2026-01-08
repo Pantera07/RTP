@@ -19,17 +19,17 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
-    compileOnly("org.popcraft:chunky-common:1.4.28")
-    compileOnly("org.popcraft:chunkyborder-common:1.2.23")
-    compileOnly("org.popcraft:chunkyborder-bukkit:1.2.23")
+    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    compileOnly("org.popcraft:chunky-common:1.4.49")
+    compileOnly("org.popcraft:chunkyborder-common:1.2.33")
+    compileOnly("org.popcraft:chunkyborder-bukkit:1.2.33")
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
         exclude(group = "org.bukkit", module = "bukkit")
     }
     //claim plugins
     compileOnly("net.crashcraft:crashclaim:1.0.42")
     compileOnly("com.github.TechFortress:GriefPrevention:16.18.4")
-    compileOnly("com.sk89q.worldguard:worldguard-bukkit:7.0.13-SNAPSHOT")
+    compileOnly("com.sk89q.worldguard:worldguard-bukkit:7.0.14")
 
 }
 
