@@ -2,6 +2,7 @@ package net.gahvila.rtp.Teleportation;
 
 import net.gahvila.rtp.RTP;
 import net.kyori.adventure.text.Component;
+import io.papermc.paper.event.player.AsyncPlayerSpawnLocationEvent;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.event.EventHandler;
@@ -9,7 +10,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.RegisteredListener;
-import org.spigotmc.event.player.PlayerSpawnLocationEvent;
 
 import java.util.WeakHashMap;
 import java.util.logging.Level;
@@ -20,7 +20,7 @@ public class RtpOnEvent implements Listener {
 
     private final RandomTeleporter randomTeleporter;
 
-    private final WeakHashMap<PlayerSpawnLocationEvent, Location>    oldSpawnLocationEvents    = new WeakHashMap<>();
+    private final WeakHashMap<AsyncPlayerSpawnLocationEvent, Location>    oldSpawnLocationEvents    = new WeakHashMap<>();
     private final WeakHashMap<PlayerRespawnEvent, Location> oldRespawnEvents = new WeakHashMap<>();
 
     public RtpOnEvent(RandomTeleporter randomTeleporter) {this.randomTeleporter = randomTeleporter;}
@@ -30,14 +30,13 @@ public class RtpOnEvent implements Listener {
      * When {@code firstJoinRtp} is enabled, this will RTP a player when they join the server
      * for the first time.
      *
-     * @param event The PlayerSpawnLocationEvent
+     * @param event The AsyncPlayerSpawnLocationEvent
      */
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void playerSpawnLocation(PlayerSpawnLocationEvent event) {
+    public void asyncPlayerSpawnLocation(AsyncPlayerSpawnLocationEvent event) {
         // If any of these are true, no nothing.
         if (!randomTeleporter.firstJoinRtp ||  // Rtp-on-first-join is DISABLED
-            event.getPlayer().hasPlayedBefore() || // The player HAS played
-            event.getPlayer().hasPermission("jakesrtp.nofirstjoinrtp") // The player is exempt
+            !event.isNewPlayer()// The player HAS played
         ) return;
         try {
             assert randomTeleporter.firstJoinSettings != null;
@@ -57,11 +56,11 @@ public class RtpOnEvent implements Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
-    public void playerSpawnLocationMonitor(PlayerSpawnLocationEvent event) {
+    public void asyncPlayerSpawnLocationMonitor(AsyncPlayerSpawnLocationEvent event) {
         Location properLoc = oldSpawnLocationEvents.get(event);
         Location actualLoc = event.getSpawnLocation();
         if (properLoc == null || locIntEqual(properLoc, actualLoc)) return;
-        handlerLogging(event.getHandlers().getRegisteredListeners(), "rtp-on-join", "PlayerSpawnLocationEvent");
+        handlerLogging(event.getHandlers().getRegisteredListeners(), "rtp-on-join", "AsyncPlayerSpawnLocationEvent");
     }
 
 
