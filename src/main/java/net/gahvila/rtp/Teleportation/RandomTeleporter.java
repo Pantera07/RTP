@@ -29,7 +29,7 @@ public class RandomTeleporter {
     // The warmup thing...
     // A player can only be waiting for one rtp, regardless of how many they call.
     // The int stored is the id of the task to cancel it.
-    public final Map<UUID, Integer> playersInWarmup = new HashMap<>();
+    public final Map<UUID, io.papermc.paper.threadedregions.scheduler.ScheduledTask> playersInWarmup = new HashMap<>();
 
     // Dynamic settings
     public final  Map<String, DistributionSettings> distributionSettings;
@@ -373,8 +373,9 @@ public class RandomTeleporter {
         if (queueEnabled && takeFromQueue && rtpProfile.canUseLocQueue) {
             Location preselectedLocation = rtpProfile.locationQueue.poll();
             if (preselectedLocation != null) {
-                plugin.getServer().getScheduler() // Tell queue to refill soon
-                      .runTaskLaterAsynchronously(plugin, () -> locFinderRunnable.syncNotify(), 100);
+                Bukkit.getAsyncScheduler().runDelayed(plugin, (task) -> { // Tell queue to refill soon
+                    locFinderRunnable.syncNotify();
+                }, 5, java.util.concurrent.TimeUnit.SECONDS);
                 return preselectedLocation;
             }
         }
@@ -415,22 +416,14 @@ public class RandomTeleporter {
                 locationBad = temp;
                 failedToClaimedLand++;
             }
-            if (!locationBad && (temp = (Bukkit.isPrimaryThread() ?
-                !new SafeLocationFinderBukkitThread(
-                    potentialRtpLocation,
-                    rtpProfile.checkRadiusXZ,
-                    rtpProfile.checkRadiusVert,
-                    rtpProfile.lowBound,
-                    rtpProfile.highBound
-                ).tryAndMakeSafe(rtpProfile.checkProfile) :
-                !new SafeLocationFinderOtherThread(
+            if (!locationBad && (temp = !new SafeLocationFinderOtherThread(
                     potentialRtpLocation,
                     rtpProfile.checkRadiusXZ,
                     rtpProfile.checkRadiusVert,
                     rtpProfile.lowBound,
                     rtpProfile.highBound,
                     asyncWaitTimeout
-                ).tryAndMakeSafe(rtpProfile.checkProfile)))) {
+                ).tryAndMakeSafe(rtpProfile.checkProfile))) {
                 // 3: For the location to actually be safe.
                 // DON'T' FORGET, THIS MAY MOVE THE LOCATION
                 locationBad = temp;

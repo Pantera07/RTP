@@ -3,6 +3,7 @@ author: JakeTS
 main: net.gahvila.rtp.RTP
 version: '${version}'
 api-version: '1.21.4'
+folia-supported: true
 
 softdepend:
   # Needed for multi-world support

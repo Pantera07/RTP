@@ -84,47 +84,24 @@ public class SafeLocationFinderOtherThread extends SafeLocationFinder {
 
         if (chunkSnapshot != null) return chunkSnapshot;
         try {
-            long maxTime = System.currentTimeMillis() + timeout * 1000L; // timeout is in seconds
-            Location chunkAt = loc.clone(); // Just for extra safety
-            // Any call to load a chunk, whether sync or async, must come from the main thread. Since here we want to
-            // load a chunk asynchronously, we first have to hop to the main thread, then have the main thread call
-            // the async method to get the chunk. Now, this would be easy enough, and could be done with this code:
-            //         chunkSnapshot = Bukkit.getScheduler().callSyncMethod(
-            //             PluginMain.plugin,
-            //             () -> PaperLib.getChunkAtAsync(loc).thenApply(Chunk::getChunkSnapshot)
-            //         ).get(timeout, TimeUnit.SECONDS).get(timeout, TimeUnit.SECONDS));
-            // but taking this approach leads to issues shutting down the request as we either need to wait for the
-            // the timeout to be reached, or let the server forcefully kill it (and send us an annoying message in
-            // console). To get around this, we break up the two gets into their own sections, and check every few
-            // milliseconds if we can retrieve it, or if we should give up.
-            CompletableFuture<ChunkSnapshot> getChunkSnapshotFuture = null;
-            Future<CompletableFuture<ChunkSnapshot>> callSyncFuture =
-                    Bukkit.getScheduler().callSyncMethod(
-                            RTP.plugin,
-                            () -> chunkAt.getWorld().getChunkAtAsync(chunkAt).thenApply(chunk -> chunk.getChunkSnapshot(false, true, false, false))
-                    );
-            // Looks to get the result of `callSyncFuture` which will be the value of `getChunkSnapshotFuture`
-            while (System.currentTimeMillis() < maxTime && plugin.locCache())
-                if (callSyncFuture.isDone()) {
-                    getChunkSnapshotFuture = callSyncFuture.get();
-                    break;
-                } else synchronized (this) {
-                    wait(100);
-                }
-            // Looks to get the result of `getChunkSnapshotFuture` which is the value of `chunkSnapshot`
-            while (System.currentTimeMillis() < maxTime && plugin.locCache())
-                if (getChunkSnapshotFuture.isDone()) {
-                    chunkSnapshot = getChunkSnapshotFuture.get();
-                    break;
-                } else synchronized (this) {
-                    wait(100);
-                }
-            if (chunkSnapshot == null) throw new TimeoutException("Essentially timed out ~");
-            // If we made it this far and still want to keep trying, then `chunkSnapshot` has a value
-            if (plugin.locCache()) chunkSnapshotMap.put(chunkKey, chunkSnapshot); // Save value for later
-                // If not, we want to throw an exception to get us all the way back home (so we can exit)
-            else throw new JrtpBaseException.PluginDisabledException();
-        } catch (CancellationException ignored) {
+            CompletableFuture<ChunkSnapshot> chunkFuture = loc.getWorld().getChunkAtAsync(loc)
+                    .thenApply(chunk -> chunk.getChunkSnapshot(false, true, false, false));
+
+            chunkSnapshot = chunkFuture.get(timeout, TimeUnit.SECONDS);
+
+            if (chunkSnapshot == null) {
+                throw new TimeoutException("Essentially timed out ~");
+            }
+
+            if (plugin.locCache()) {
+                chunkSnapshotMap.put(chunkKey, chunkSnapshot);
+            } else {
+                throw new JrtpBaseException.PluginDisabledException();
+            }
+
+        } catch (java.util.concurrent.TimeoutException e) {
+            throw new TimeoutException("Essentially timed out ~");
+        } catch (CancellationException e) {
             throw new JrtpBaseException.PluginDisabledException();
         } catch (InterruptedException e) {
             infoLog("Caught an unexpected interrupt.");
