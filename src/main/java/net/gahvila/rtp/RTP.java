@@ -12,13 +12,11 @@ import net.gahvila.rtp.PluginHooks.ClaimsManager;
 import net.gahvila.rtp.PluginHooks.WorldBorderPluginHook;
 import net.gahvila.rtp.Utils.GeneralUtil;
 import net.gahvila.rtp.Utils.LocationCacheFiller;
-import net.gahvila.rtp.SafeLocation.SafeLocationUtils;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitWorker;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.*;
@@ -102,13 +100,10 @@ public final class RTP extends JavaPlugin {
         HandlerList.unregisterAll(this);
         theRandomTeleporter = null;
         //the threads of this plugin are not critical, lets murder them
-        locFinderRunnable.markAsOver();
-        Bukkit.getScheduler().cancelTasks(this);
-        for (BukkitWorker bukkitWorker : Bukkit.getScheduler().getActiveWorkers()) {
-            if (bukkitWorker.getOwner().equals(this)){
-                bukkitWorker.getThread().interrupt();
-            }
-        }
+        if (locFinderRunnable != null) {
+            locFinderRunnable.markAsOver();
+        Bukkit.getAsyncScheduler().cancelTasks(this);
+        Bukkit.getGlobalRegionScheduler().cancelTasks(this);
     }
 
     public boolean locCache() {
@@ -197,12 +192,13 @@ public final class RTP extends JavaPlugin {
         //Then load up a new runnable
         if (getConfig().getBoolean("location-cache-filler.enabled", true)) {
             infoLog("Setting up the location caching system.");
-            Bukkit.getScheduler().runTaskAsynchronously(this, (
+            locFinderRunnable = new LocationCacheFiller(
                 locFinderRunnable = new LocationCacheFiller(
                     this,
                     (long) (getConfig().getDouble("location-cache-filler.recheck-time", 2) * 1000),
-                    (long) (getConfig().getDouble("location-cache-filler.between-time", 0.5) * 1000))
-            ));
+                    (long) (getConfig().getDouble("location-cache-filler.between-time", 0.5) * 1000));
+
+            Bukkit.getAsyncScheduler().runNow(this, scheduledTask -> locFinderRunnable.run());
         }
     }
 
