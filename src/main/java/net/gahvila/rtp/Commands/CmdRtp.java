@@ -56,7 +56,7 @@ public class CmdRtp implements TabExecutor {
                                 if (task == null) // This should only really happen during shutdown.
                                     throw new JrtpBaseException("Could not schedule rtp-after-warmup.");
                                 randomTeleporter.playersInWarmup.put(player.getUniqueId(), task); // Needed for canceling.
-                            } else execRtp.accept(null) // No warmup, just run the teleport.
+                            } else execRtp.accept(null); // No warmup, just run the teleport.
                         } else player.sendRichMessage(Messages.ECON_NOT_ENOUGH_MONEY.format(
                             relSettings.cost, plugin.getEconomy().getBalance(player)));
                     } else player.sendRichMessage(Messages.WARMUP_RTP_ALREADY_CALLED.format());
