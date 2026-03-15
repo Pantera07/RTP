@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static net.gahvila.rtp.Utils.GeneralUtil.fillPlaceholders;
 import static net.gahvila.rtp.Utils.GeneralUtil.locationAsString;
@@ -212,9 +213,11 @@ public class RandomTeleportAction {
             else infoLog(
                 logMessage +
                 "Player did not teleport.");
-        rtpCount++;
+        rtpCount.incrementAndGet();
         for (String command : rtpProfile.commandsToRun)
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), fillPlaceholders(command, placeholders));
+            Bukkit.getServer().getGlobalRegionScheduler().execute(RTP.plugin, () -> {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), fillPlaceholders(command, placeholders));
+            });
         for (String message : rtpProfile.messagesToSend)
             player.sendRichMessage(fillPlaceholders(message, placeholders));
     }
@@ -225,15 +228,13 @@ public class RandomTeleportAction {
 
 
     // For metrics
-    private static int rtpCount = 0;
+    private static final AtomicInteger rtpCount = new AtomicInteger(0);
 
-    public static int getRtpCount() {return rtpCount;}
+    public static int getRtpCount() { return rtpCount.get(); }
 
-    public static void clearRtpCount() {rtpCount = 0;}
+    public static void clearRtpCount() { rtpCount.set(0); }
 
     public static int getAndClearRtpCount(){
-        int count = rtpCount;
-        rtpCount = 0;
-        return count;
+        return rtpCount.getAndSet(0);
     }
 }
