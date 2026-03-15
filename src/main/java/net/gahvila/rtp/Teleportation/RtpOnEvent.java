@@ -13,9 +13,6 @@ import org.bukkit.plugin.RegisteredListener;
 
 import java.util.WeakHashMap;
 import java.util.logging.Level;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import static net.gahvila.rtp.Utils.GeneralUtil.isAnchorSpawn;
 
@@ -42,6 +39,18 @@ public class RtpOnEvent implements Listener {
             !event.isNewPlayer()// The player HAS played
         ) return;
         try {
+            // Check if the queue is empty to prevent regional thread freezing (Watchdog crash)
+            if (randomTeleporter.firstJoinSettings.canUseLocQueue &&
+                    randomTeleporter.firstJoinSettings.locationQueue.isEmpty()) {
+
+                RTP.infoLog("The location queue is empty. Spawning at default spawn to prevent lag.");
+
+                // Wake up the background filler thread
+                if (RTP.locFinderRunnable != null) {
+                    RTP.locFinderRunnable.syncNotify();
+                }
+                return;
+            }
             assert randomTeleporter.firstJoinSettings != null;
             assert randomTeleporter.firstJoinSettings.landingWorld != null;
             Location landingLoc = new RandomTeleportAction(
@@ -91,6 +100,18 @@ public class RtpOnEvent implements Listener {
                 (!randomTeleporter.onDeathRequirePermission || event.getPlayer().hasPermission("jakesrtp.rtpondeath")) &&
                 (runDefaultRTP || runLavaOverrideRTP)
         ) try {
+            // Check if the queue is empty to prevent regional thread freezing (Watchdog crash)
+            if (randomTeleporter.onDeathSettings.canUseLocQueue &&
+                    randomTeleporter.onDeathSettings.locationQueue.isEmpty()) {
+
+                RTP.infoLog("The location queue is empty. Respawning at default spawn to prevent lag.");
+
+                // Wake up the background filler thread
+                if (RTP.locFinderRunnable != null) {
+                    RTP.locFinderRunnable.syncNotify();
+                }
+                return;
+            }
             Location landingLoc = new RandomTeleportAction(
                 randomTeleporter,
                 randomTeleporter.onDeathSettings,
@@ -154,31 +175,30 @@ public class RtpOnEvent implements Listener {
     }
 
     private boolean isSafeFromLava(Location respawnLocation) {
-        try {
-            org.bukkit.ChunkSnapshot chunkSnapshot = respawnLocation.getWorld()
-                    .getChunkAtAsync(respawnLocation)
-                    .thenApply(chunk -> chunk.getChunkSnapshot(false, true, false, false))
-                    .get(3, TimeUnit.SECONDS);
-
-            if (chunkSnapshot == null) return true;
-
-            double originalY = respawnLocation.getY();
-            int floorY = (int) Math.floor(originalY);
-            int safeY = (originalY - floorY > 0.2) ? (floorY + 1) : floorY;
-
-            int localX = respawnLocation.getBlockX() & 15;
-            int localZ = respawnLocation.getBlockZ() & 15;
-
-            Material blockBelow = chunkSnapshot.getBlockData(localX, safeY, localZ).getMaterial();
-            Material blockAbove = chunkSnapshot.getBlockData(localX, safeY + 1, localZ).getMaterial();
-
-            if (blockBelow == Material.LAVA || blockAbove == Material.LAVA) {
-                return false; // Not safe because lava was found.
-            }
-
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            RTP.log(Level.WARNING, "Timeout while checking lava safety for respawn.");
+        if (!respawnLocation.isChunkLoaded()) {
             return true;
+        }
+
+        double originalY = respawnLocation.getY();
+        int floorY = (int) Math.floor(originalY);
+        int safeY = (originalY - floorY > 0.2) ? (floorY + 1) : floorY;
+
+        Location checkLocation = new Location(
+                respawnLocation.getWorld(),
+                respawnLocation.getX(),
+                safeY,
+                respawnLocation.getZ()
+        );
+
+        if (!org.bukkit.Bukkit.isOwnedByCurrentRegion(checkLocation)) {
+            return true;
+        }
+
+        Material blockBelow = checkLocation.getBlock().getType();
+        Material blockAbove = checkLocation.clone().add(0, 1, 0).getBlock().getType();
+
+        if (blockBelow == Material.LAVA || blockAbove == Material.LAVA) {
+            return false; // Not safe because lava was found.
         }
 
         return true; // Safe from lava.

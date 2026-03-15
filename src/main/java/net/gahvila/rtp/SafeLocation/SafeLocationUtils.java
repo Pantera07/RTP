@@ -59,31 +59,18 @@ public class SafeLocationUtils {
         return Tag.LEAVES.isTagged(mat);
     }
 
+    private static final Set<Biome> ALLOWED_BIOMES = Set.of(
+            Biome.MEADOW, Biome.CHERRY_GROVE, Biome.FOREST, Biome.FLOWER_FOREST,
+            Biome.TAIGA, Biome.OLD_GROWTH_PINE_TAIGA, Biome.OLD_GROWTH_SPRUCE_TAIGA,
+            Biome.BIRCH_FOREST, Biome.OLD_GROWTH_BIRCH_FOREST, Biome.DARK_FOREST,
+            Biome.SPARSE_JUNGLE, Biome.SWAMP, Biome.MANGROVE_SWAMP, Biome.PLAINS,
+            Biome.SUNFLOWER_PLAINS, Biome.SAVANNA, Biome.SAVANNA_PLATEAU,
+            Biome.NETHER_WASTES, Biome.SOUL_SAND_VALLEY, Biome.CRIMSON_FOREST,
+            Biome.WARPED_FOREST, Biome.PALE_GARDEN
+    );
+
     boolean isAllowedBiome(Biome biome) {
-        Set<Biome> allowedBiomes = new HashSet<>();
-        allowedBiomes.add(Biome.MEADOW);
-        allowedBiomes.add(Biome.CHERRY_GROVE);
-        allowedBiomes.add(Biome.FOREST);
-        allowedBiomes.add(Biome.FLOWER_FOREST);
-        allowedBiomes.add(Biome.TAIGA);
-        allowedBiomes.add(Biome.OLD_GROWTH_PINE_TAIGA);
-        allowedBiomes.add(Biome.OLD_GROWTH_SPRUCE_TAIGA);
-        allowedBiomes.add(Biome.BIRCH_FOREST);
-        allowedBiomes.add(Biome.OLD_GROWTH_BIRCH_FOREST);
-        allowedBiomes.add(Biome.DARK_FOREST);
-        allowedBiomes.add(Biome.SPARSE_JUNGLE);
-        allowedBiomes.add(Biome.SWAMP);
-        allowedBiomes.add(Biome.MANGROVE_SWAMP);
-        allowedBiomes.add(Biome.PLAINS);
-        allowedBiomes.add(Biome.SUNFLOWER_PLAINS);
-        allowedBiomes.add(Biome.SAVANNA);
-        allowedBiomes.add(Biome.SAVANNA_PLATEAU);
-        allowedBiomes.add(Biome.NETHER_WASTES);
-        allowedBiomes.add(Biome.SOUL_SAND_VALLEY);
-        allowedBiomes.add(Biome.CRIMSON_FOREST);
-        allowedBiomes.add(Biome.WARPED_FOREST);
-        allowedBiomes.add(Biome.PALE_GARDEN);
-        return allowedBiomes.contains(biome);
+        return ALLOWED_BIOMES.contains(biome);
     }
 
     /**
