@@ -13,6 +13,9 @@ import org.bukkit.plugin.RegisteredListener;
 
 import java.util.WeakHashMap;
 import java.util.logging.Level;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static net.gahvila.rtp.Utils.GeneralUtil.isAnchorSpawn;
 
@@ -151,33 +154,31 @@ public class RtpOnEvent implements Listener {
     }
 
     private boolean isSafeFromLava(Location respawnLocation) {
-        // Skip check if the chunk is not loaded to prevent lag/errors.
-        if (!respawnLocation.getBlock().getChunk().isLoaded()) return true;
+        try {
+            org.bukkit.ChunkSnapshot chunkSnapshot = respawnLocation.getWorld()
+                    .getChunkAtAsync(respawnLocation)
+                    .thenApply(chunk -> chunk.getChunkSnapshot(false, true, false, false))
+                    .get(3, TimeUnit.SECONDS);
 
-        // Create a new location with ceil(Y) to ensure we check the correct integer block height.
-        double originalY = respawnLocation.getY();
-        int floorY = (int) Math.floor(originalY);
-        int safeY = (originalY - floorY > 0.2) ? (floorY + 1) : floorY;
+            if (chunkSnapshot == null) return true;
 
-        // Use the ceiling Y for block checking. X and Z remain the same.
-        Location checkLocation = new Location(
-                respawnLocation.getWorld(),
-                respawnLocation.getX(),
-                safeY,
-                respawnLocation.getZ()
-        );
+            double originalY = respawnLocation.getY();
+            int floorY = (int) Math.floor(originalY);
+            int safeY = (originalY - floorY > 0.2) ? (floorY + 1) : floorY;
 
-        // 1. Block where the player's feet will be (at safeY).
-        Material blockBelow = checkLocation.getBlock().getType();
+            int localX = respawnLocation.getBlockX() & 15;
+            int localZ = respawnLocation.getBlockZ() & 15;
 
-        // 2. Block where the player's head will be (at safeY + 1).
-        // Note: The player occupies two blocks (safeY and safeY + 1).
-        Location headLocation = checkLocation.clone().add(0, 1, 0);
-        Material blockAbove = headLocation.getBlock().getType();
+            Material blockBelow = chunkSnapshot.getBlockData(localX, safeY, localZ).getMaterial();
+            Material blockAbove = chunkSnapshot.getBlockData(localX, safeY + 1, localZ).getMaterial();
 
-        // Check if either of the two blocks is lava.
-        if (blockBelow == Material.LAVA || blockAbove == Material.LAVA) {
-            return false; // Not safe because lava was found.
+            if (blockBelow == Material.LAVA || blockAbove == Material.LAVA) {
+                return false; // Not safe because lava was found.
+            }
+
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            RTP.log(Level.WARNING, "Timeout while checking lava safety for respawn.");
+            return true;
         }
 
         return true; // Safe from lava.
