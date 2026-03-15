@@ -102,6 +102,7 @@ public final class RTP extends JavaPlugin {
         //the threads of this plugin are not critical, lets murder them
         if (locFinderRunnable != null) {
             locFinderRunnable.markAsOver();
+        }
         Bukkit.getAsyncScheduler().cancelTasks(this);
         Bukkit.getGlobalRegionScheduler().cancelTasks(this);
     }
@@ -193,7 +194,6 @@ public final class RTP extends JavaPlugin {
         if (getConfig().getBoolean("location-cache-filler.enabled", true)) {
             infoLog("Setting up the location caching system.");
             locFinderRunnable = new LocationCacheFiller(
-                locFinderRunnable = new LocationCacheFiller(
                     this,
                     (long) (getConfig().getDouble("location-cache-filler.recheck-time", 2) * 1000),
                     (long) (getConfig().getDouble("location-cache-filler.between-time", 0.5) * 1000));
