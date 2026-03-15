@@ -33,7 +33,7 @@ public class LocationCacheFiller implements Runnable {
         final String threadOldName = Thread.currentThread().getName();
         Thread.currentThread().setName("Loc Cache Filler");
         try {
-            SimpleLagTimer.blockingTimer(pluginMain(), 5000);
+            patientlyWait(5000);
             infoLog("LCF Started.");
             int issueCounter = 0, issueCounterMax = 10;
             while (keepRunning && isPluginLoaded()) {
