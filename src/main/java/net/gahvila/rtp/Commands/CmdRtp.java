@@ -1,5 +1,6 @@
 package net.gahvila.rtp.Commands;
 
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import net.gahvila.rtp.Exceptions.JrtpBaseException;
 import net.gahvila.rtp.Messages.Messages;
 import net.gahvila.rtp.Teleportation.RandomTeleportAction;
@@ -11,10 +12,10 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitScheduler;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static net.gahvila.rtp.RTP.plugin;
 
@@ -49,16 +50,13 @@ public class CmdRtp implements TabExecutor {
                         if (!plugin.canUseEconomy() || relSettings.cost <= 0 ||
                             plugin.getEconomy().getBalance(player) >= relSettings.cost) {
                             // ==== By this point, all checks are done and the player WILL be teleported. ====
-                            final Runnable execRtp = makeRunnable(player, relSettings, warmup);
+                            final Consumer<ScheduledTask> execRtp = makeFoliaTask(player, relSettings, warmup);
                             if (warmup) { // If there is a warmup, schedule the runnable
-                                final int taskID = sender
-                                    .getServer().getScheduler() // Get the task ID so that we can cancel it later.
-                                    .scheduleSyncRepeatingTask(plugin, execRtp, 2, 20);
-                                if (taskID == -1) // This should only really happen during shutdown.
+                                ScheduledTask task = player.getScheduler().runAtFixedRate(plugin, execRtp, null, 2, 20);
+                                if (task == null) // This should only really happen during shutdown.
                                     throw new JrtpBaseException("Could not schedule rtp-after-warmup.");
-                                randomTeleporter.playersInWarmup.put(player.getUniqueId(),
-                                                                     taskID); // Needed for canceling.
-                            } else execRtp.run(); // No warmup, just run the teleport.
+                                randomTeleporter.playersInWarmup.put(player.getUniqueId(), task); // Needed for canceling.
+                            } else execRtp.accept(null) // No warmup, just run the teleport.
                         } else player.sendRichMessage(Messages.ECON_NOT_ENOUGH_MONEY.format(
                             relSettings.cost, plugin.getEconomy().getBalance(player)));
                     } else player.sendRichMessage(Messages.WARMUP_RTP_ALREADY_CALLED.format());
@@ -74,26 +72,25 @@ public class CmdRtp implements TabExecutor {
         return true;
     }
 
-    private Runnable makeRunnable(final Player player, final RtpProfile rtpProfile, boolean calculatedWarmup) {
-        return new Runnable() {
-            private final BukkitScheduler scheduler = player.getServer().getScheduler();
+    private Consumer<ScheduledTask> makeFoliaTask(final Player player, final RtpProfile rtpProfile, boolean calculatedWarmup) {
+        return new Consumer<ScheduledTask>() {
             private final Location startLoc = player.getLocation().clone();
             private final boolean warmup = calculatedWarmup;
             private final long startTime = System.currentTimeMillis();
             private int done = 0;
 
             @Override
-            public void run() {
+            public void accept(ScheduledTask task) {
                 // The annoying error message, lets hope we never need use this...
-                if (done > 1) taskError();
+                if (done > 1) taskError(task);
                     // If There should be no warmup, we teleport the user immediately.
-                else if (!warmup) teleport();
+                else if (!warmup) teleport(task);
                     // If we want the user to stand still AND they move, we cancel this runnable / future rtp.
                 else if (rtpProfile.warmupCancelOnMove &&
-                         (startLoc.getWorld() != player.getWorld() || startLoc.distance(player.getLocation()) > 1))
-                    cancel();
+                        (startLoc.getWorld() != player.getWorld() || startLoc.distance(player.getLocation()) > 1))
+                    cancel(task);
                     // If we have waited enough time, we teleport the user.
-                else if (timeDifInSeconds() >= rtpProfile.warmup) teleport();
+                else if (timeDifInSeconds() >= rtpProfile.warmup) teleport(task);
                     // If we got to this point, the user still has to wait, and if wanted, we let them know how long.
                 else if (rtpProfile.warmupCountDown) countDown();
                 // If none of these were called, we just silently wait until the next time run() is called.
@@ -108,7 +105,7 @@ public class CmdRtp implements TabExecutor {
                 ));
             }
 
-            private void teleport() {
+            private void teleport(ScheduledTask task) {
                 try {
                     if (rtpProfile.cost > 0 && plugin.getEconomy().getBalance(player) < rtpProfile.cost) {
                         player.sendRichMessage(Messages.ECON_NO_LONGER_ENOUGH_MONEY.format());
@@ -123,9 +120,7 @@ public class CmdRtp implements TabExecutor {
                         true,
                         randomTeleporter.logRtpOnCommand, "Rtp-from-command triggered!"
                     );
-                    if (rtpProfile.preferSyncTpOnCommand)
-                         rtpAction.teleportSync (player);
-                    else rtpAction.teleportAsync(player);
+                    rtpAction.teleportAsync(player);
                     // Log in the cooldown list
                     rtpProfile.coolDown.log(player.getName(), System.currentTimeMillis());
                     // Charge the player
@@ -141,24 +136,28 @@ public class CmdRtp implements TabExecutor {
                     player.sendRichMessage(Messages.NP_UNEXPECTED_EXCEPTION.format(e.getMessage()));
                     e.printStackTrace();
                 } finally {
-                    cancelTask();
+                    cancelTask(task);
                 }
             }
 
-            private void cancel() {
+            private void cancel(ScheduledTask task) {
                 player.sendRichMessage(Messages.WARMUP_CANCEL_BECAUSE_MOVE.format());
-                cancelTask();
+                cancelTask(task);
             }
 
-            private void cancelTask() {
+            private void cancelTask(ScheduledTask task) {
                 done++;
-                Integer taskID = randomTeleporter.playersInWarmup.remove(player.getUniqueId());
-                if (taskID != null)
-                    scheduler.cancelTask(taskID); // Only cancel if task existed.
+                ScheduledTask storedTask = randomTeleporter.playersInWarmup.remove(player.getUniqueId());
+
+                if (task != null) {
+                    task.cancel(); // Only cancel if task existed.
+                } else if (storedTask != null) {
+                    storedTask.cancel();
+                }
             }
 
-            private void taskError() {
-                if (done > 1000) scheduler.cancelTasks(plugin); // Emergency cleanup.
+            private void taskError(ScheduledTask task) {
+                if (task != null) task.cancel();
                 if (done < 10 || done % 100 == 0) throw new RuntimeException("RTP task run twice?? Please report.");
                 done++; // This is meant to be annoying, but not *too* annoying.
             }
